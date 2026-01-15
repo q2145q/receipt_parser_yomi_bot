@@ -2,6 +2,14 @@
 
 Telegram бот для автоматической обработки чеков самозанятых с загрузкой на Google Drive и добавлением в Google Sheets.
 
+## 📚 Документация
+
+- **[USAGE.md](USAGE.md)** - Подробное руководство по использованию
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Архитектура системы
+- **[API.md](API.md)** - Справочник API
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Руководство для разработчиков
+- **[CHANGELOG.md](CHANGELOG.md)** - История изменений
+
 ## Возможности
 
 - 📸 Распознавание чеков из фото (одиночных или пачкой)
@@ -25,8 +33,8 @@ Telegram бот для автоматической обработки чеко�
 
 ### 1. Клонирование репозитория
 ```bash
-git clone https://github.com/YOUR_USERNAME/receipt_parser_yomi.git
-cd receipt_parser_yomi
+git clone https://github.com/q2145q/receipt_parser_yomi_bot.git
+cd receipt_parser_yomi_bot
 ```
 
 ### 2. Создание виртуального окружения
@@ -140,24 +148,3 @@ receipt_parser_yomi/
 ## Лицензия
 
 MIT
-```
-
----
-
-## Шаг 3: Обновляем requirements.txt
-
-**Файл `requirements.txt`:**
-```
-python-telegram-bot[job-queue]==20.7
-google-api-python-client==2.108.0
-google-auth-httplib2==0.2.0
-google-auth-oauthlib==1.2.0
-opencv-python==4.8.1.78
-pyzbar==0.1.9
-requests==2.31.0
-pillow==10.1.0
-python-dotenv==1.0.0
-openai==1.54.0
-pdf2image==1.17.0
-pytesseract==0.3.10
-numpy<2

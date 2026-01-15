@@ -12,6 +12,7 @@ ENV/
 .env
 credentials.json
 token.pickle
+token.json
 
 # Тестовые файлы
 test_receipt.jpeg
