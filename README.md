@@ -140,24 +140,3 @@ receipt_parser_yomi/
 ## Лицензия
 
 MIT
-```
-
----
-
-## Шаг 3: Обновляем requirements.txt
-
-**Файл `requirements.txt`:**
-```
-python-telegram-bot[job-queue]==20.7
-google-api-python-client==2.108.0
-google-auth-httplib2==0.2.0
-google-auth-oauthlib==1.2.0
-opencv-python==4.8.1.78
-pyzbar==0.1.9
-requests==2.31.0
-pillow==10.1.0
-python-dotenv==1.0.0
-openai==1.54.0
-pdf2image==1.17.0
-pytesseract==0.3.10
-numpy<2
