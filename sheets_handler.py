@@ -1,5 +1,7 @@
 from googleapiclient.discovery import build
 from google_auth import get_google_credentials
+from datetime import datetime
+import pytz
 
 class SheetsHandler:
     def __init__(self, spreadsheet_id):
@@ -17,7 +19,7 @@ class SheetsHandler:
         data - словарь с полями:
         {
             'full_name': 'Фамилия И.О.',
-            'amount': '7 021,00',
+            'amount': '7 021,00 ₽',
             'services': 'актерские услуги',
             'buyer_inn': '9705246070',
             'date': '13.08.2025',
@@ -26,6 +28,10 @@ class SheetsHandler:
             'drive_link': 'https://...'
         }
         """
+        # Получаем текущее время в московском часовом поясе
+        moscow_tz = pytz.timezone('Europe/Moscow')
+        timestamp = datetime.now(moscow_tz).strftime('%d.%m.%Y %H:%M:%S')
+        
         # Формируем строку для добавления
         row = [
             data.get('date', ''),
@@ -34,8 +40,9 @@ class SheetsHandler:
             data.get('services', ''),
             data.get('amount', ''),
             data.get('status', ''),
-            data.get('fns_link', ''),
-            data.get('drive_link', '')
+            data.get('fns_url', ''),  # Добавили ссылку ФНС
+            data.get('drive_link', ''),
+            timestamp  # Добавили timestamp
         ]
         
         # Добавляем строку в конец таблицы
@@ -44,7 +51,7 @@ class SheetsHandler:
         }
         result = self.service.spreadsheets().values().append(
             spreadsheetId=self.spreadsheet_id,
-            range='A:H',  # Колонки A-H
+            range='A:I',  # Теперь до колонки I (было H)
             valueInputOption='USER_ENTERED',
             body=body
         ).execute()
@@ -63,7 +70,8 @@ class SheetsHandler:
             'Сумма',
             'Статус',
             'Ссылка ФНС',
-            'Ссылка Drive'
+            'Ссылка Drive',
+            'Добавлено (МСК)'  # Новая колонка
         ]
         
         body = {
@@ -71,7 +79,7 @@ class SheetsHandler:
         }
         result = self.service.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
-            range='A1:H1',
+            range='A1:I1',  # Теперь до колонки I
             valueInputOption='RAW',
             body=body
         ).execute()

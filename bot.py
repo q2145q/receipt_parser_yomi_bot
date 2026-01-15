@@ -97,6 +97,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⏳ Обрабатываю чек...")
         await process_single_photo(update, photo)
 
+
 async def process_single_photo(update: Update, photo):
     """
     Обработка одного фото
@@ -143,7 +144,7 @@ async def process_single_photo(update: Update, photo):
         await update.message.reply_text(
             confirmation_text,
             reply_markup=reply_markup,
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         
     except Exception as e:
@@ -151,6 +152,7 @@ async def process_single_photo(update: Update, photo):
         await update.message.reply_text(
             f"❌ Произошла ошибка: {str(e)}"
         )
+
 
 async def process_media_group_delayed(context, media_group_id, chat_id):
     """
@@ -214,19 +216,19 @@ async def process_media_group_delayed(context, media_group_id, chat_id):
     summary = f"✅ Обработано чеков: {len(results)}/{len(photos)}\n\n"
     
     if results:
-        summary += "📋 **Успешно загружены:**\n"
+        summary += "📋 <b>Успешно загружены:</b>\n"
         for r in results:
             summary += f"{r['num']}. {r['name']} - {r['amount']} ({r['date']})\n"
     
     if failed:
-        summary += f"\n❌ **Ошибки ({len(failed)}):**\n"
+        summary += f"\n❌ <b>Ошибки ({len(failed)}):</b>\n"
         for f in failed:
             summary += f"• {f}\n"
     
     await context.bot.send_message(
         chat_id=chat_id,
         text=summary,
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
     
     # Удаляем группу из памяти
@@ -305,7 +307,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             confirmation_text,
             reply_markup=reply_markup,
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         
     except Exception as e:
@@ -376,7 +378,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             success, result_message = processor.upload_and_save(file_path, data)
             
             if success:
-                await query.edit_message_text(result_message, parse_mode='Markdown')
+                await query.edit_message_text(result_message, parse_mode='HTML')
             else:
                 await query.edit_message_text(f"❌ Ошибка сохранения:\n{result_message}")
             
@@ -410,17 +412,18 @@ def format_receipt_data(data):
     """
     Форматирование данных чека для отображения
     """
-    fns_link = data.get('fns_url', '#')
+    fns_link = data.get('fns_url', '')
     
+    # Используем HTML вместо Markdown
     return (
-        "📋 **Распознанные данные:**\n\n"
-        f"👤 ФИО: `{data.get('full_name', 'не найдено')}`\n"
-        f"💰 Сумма: `{data.get('amount', 'не найдено')}`\n"
-        f"📝 Услуги: `{data.get('services', 'не найдено')}`\n"
-        f"🏢 ИНН покупателя: `{data.get('buyer_inn', 'не найден')}`\n"
-        f"📅 Дата: `{data.get('date', 'не найдена')}`\n"
-        f"✅ Статус: `{data.get('status', 'не найден')}`\n"
-        f"🔗 [Ссылка ФНС]({fns_link})\n\n"
+        "<b>📋 Распознанные данные:</b>\n\n"
+        f"👤 ФИО: <code>{data.get('full_name', 'не найдено')}</code>\n"
+        f"💰 Сумма: <code>{data.get('amount', 'не найдено')}</code>\n"
+        f"📝 Услуги: <code>{data.get('services', 'не найдено')}</code>\n"
+        f"🏢 ИНН покупателя: <code>{data.get('buyer_inn', 'не найден')}</code>\n"
+        f"📅 Дата: <code>{data.get('date', 'не найдена')}</code>\n"
+        f"✅ Статус: <code>{data.get('status', 'не найден')}</code>\n"
+        f"🔗 <a href='{fns_link}'>Ссылка ФНС</a>\n\n"
         "Все верно?"
     )
 
