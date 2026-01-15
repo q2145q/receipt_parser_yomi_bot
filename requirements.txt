@@ -1,0 +1,9 @@
+python-telegram-bot==20.7
+google-api-python-client==2.108.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.0
+opencv-python==4.8.1.78
+pyzbar==0.1.9
+requests==2.31.0
+pillow==10.1.0
+python-dotenv==1.0.0
