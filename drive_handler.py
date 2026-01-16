@@ -73,3 +73,73 @@ class DriveHandler:
             'filename': new_filename,
             'folder_path': f"{buyer_inn}/{month_folder_name}"
         }
+    def create_analysis_folder(self, folder_name):
+        """
+        Создание папки для массового анализа
+        folder_name - название папки (например: "@username 2026-01-16 10-30")
+        Возвращает: (folder_id, web_link)
+        """
+        folder_metadata = {
+            'name': folder_name,
+            'mimeType': 'application/vnd.google-apps.folder',
+            'parents': [self.root_folder_id]
+        }
+        folder = self.service.files().create(
+            body=folder_metadata,
+            fields='id, webViewLink'
+        ).execute()
+        
+        return folder.get('id'), folder.get('webViewLink')
+
+    def list_files_in_folder(self, folder_id):
+        """
+        Получение списка всех файлов из папки
+        Возвращает список файлов: [{'id': '...', 'name': '...', 'mimeType': '...'}, ...]
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        query = f"'{folder_id}' in parents and trashed=false and mimeType != 'application/vnd.google-apps.folder'"
+        results = self.service.files().list(
+            q=query,
+            fields="files(id, name, mimeType)",
+            pageSize=1000
+        ).execute()
+        
+        files = results.get('files', [])
+        
+        logger.info(f"Всего файлов в папке: {len(files)}")
+        for f in files:
+            logger.info(f"Файл: {f['name']}, тип: {f['mimeType']}")
+        
+        # Фильтруем только изображения и PDF (расширенный список)
+        allowed_types = [
+            'image/jpeg',
+            'image/png', 
+            'image/jpg',
+            'application/pdf',
+            'image/heic',  # iPhone фото
+            'image/heif',  # iPhone фото
+            'image/webp'   # Веб-формат
+        ]
+        
+        filtered = [f for f in files if f['mimeType'] in allowed_types]
+        
+        logger.info(f"Файлов после фильтрации: {len(filtered)}")
+        
+        return filtered
+
+    def download_file(self, file_id, destination_path):
+        """
+        Скачивание файла с Drive
+        file_id - ID файла на Drive
+        destination_path - путь для сохранения
+        """
+        request = self.service.files().get_media(fileId=file_id)
+        
+        with open(destination_path, 'wb') as f:
+            from googleapiclient.http import MediaIoBaseDownload
+            downloader = MediaIoBaseDownload(f, request)
+            done = False
+            while not done:
+                status, done = downloader.next_chunk()

@@ -97,17 +97,26 @@ def parse_receipt_data(ocr_text):
 def validate_and_clean_data(data):
     """
     Проверка и очистка данных
-    Возвращает True если все критичные поля заполнены
+    Теперь НЕ отклоняет чек, а собирает список ошибок
+    Возвращает (True, список_ошибок)
     """
+    errors = []
     required_fields = ['full_name', 'amount', 'buyer_inn', 'date']
     
     # Проверяем наличие обязательных полей
     for field in required_fields:
         if field not in data or not data[field]:
-            return False, f"Отсутствует поле: {field}"
+            errors.append(f"Не найдено: {field}")
+            # Добавляем значение по умолчанию
+            data[field] = "Не распознано"
     
-    # Проверка формата ИНН (10 или 12 цифр)
-    if not re.match(r'^\d{10}$|^\d{12}$', data['buyer_inn']):
-        return False, "Некорректный ИНН покупателя"
+    # Проверка формата ИНН (только если поле заполнено)
+    if data.get('buyer_inn') and data['buyer_inn'] != "Не распознано":
+        if not re.match(r'^\d{10}$|^\d{12}$', data['buyer_inn']):
+            errors.append("Некорректный формат ИНН покупателя")
     
-    return True, "OK"
+    # Формируем текст ошибок
+    error_text = "; ".join(errors) if errors else ""
+    
+    # Всегда возвращаем True - чек сохраняется в любом случае
+    return True, error_text

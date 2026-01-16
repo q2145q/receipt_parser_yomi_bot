@@ -38,11 +38,12 @@ class ReceiptProcessor:
                 receipt_data['fns_url'] = qr_data.get('fns_url', '')
             
             # 4. Валидация
-            is_valid, validation_message = validate_and_clean_data(receipt_data)
-            
-            if not is_valid:
-                return False, receipt_data, validation_message
-            
+            # 4. Валидация (теперь всегда возвращает True)
+            is_valid, error_details = validate_and_clean_data(receipt_data)
+
+            # Добавляем информацию об ошибках в данные
+            receipt_data['error_details'] = error_details
+
             return True, receipt_data, "OK"
             
         except Exception as e:

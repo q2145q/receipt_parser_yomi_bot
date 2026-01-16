@@ -1,7 +1,25 @@
+# Файл: sheets_handler.py
+
 from googleapiclient.discovery import build
 from google_auth import get_google_credentials
 from datetime import datetime
 import pytz
+
+def extract_amount_number(amount_str):
+    """
+    Извлекает число из строки суммы
+    Например: "7 021.00 ₽" → 7021.00
+    """
+    if not amount_str or amount_str == "Не распознано":
+        return 0
+    
+    try:
+        # Убираем все кроме цифр, точки и запятой
+        clean_str = amount_str.replace('₽', '').replace(' ', '').replace(',', '.').strip()
+        # Преобразуем в float
+        return float(clean_str)
+    except:
+        return 0
 
 class SheetsHandler:
     def __init__(self, spreadsheet_id):
@@ -24,8 +42,10 @@ class SheetsHandler:
             'buyer_inn': '9705246070',
             'date': '13.08.2025',
             'status': 'Действителен / Аннулирован',
-            'fns_link': 'https://...',
-            'drive_link': 'https://...'
+            'fns_url': 'https://...',
+            'drive_link': 'https://...',
+            'username': '@username',  # НОВОЕ ПОЛЕ
+            'error_details': ''  # НОВОЕ ПОЛЕ - для ошибок
         }
         """
         # Получаем текущее время в московском часовом поясе
@@ -34,15 +54,17 @@ class SheetsHandler:
         
         # Формируем строку для добавления
         row = [
-            data.get('date', ''),
-            data.get('full_name', ''),
-            data.get('buyer_inn', ''),
-            data.get('services', ''),
-            data.get('amount', ''),
-            data.get('status', ''),
-            data.get('fns_url', ''),  # Добавили ссылку ФНС
+            data.get('date', 'Не распознано'),
+            data.get('full_name', 'Не распознано'),
+            data.get('buyer_inn', 'Не распознано'),
+            data.get('services', 'Не распознано'),
+            extract_amount_number(data.get('amount', '0')),  # ИЗМЕНЕНО: теперь число
+            data.get('status', 'Не распознано'),
+            data.get('fns_url', ''),
             data.get('drive_link', ''),
-            timestamp  # Добавили timestamp
+            timestamp,
+            data.get('username', 'Неизвестный'),
+            data.get('error_details', '')
         ]
         
         # Добавляем строку в конец таблицы
@@ -51,7 +73,7 @@ class SheetsHandler:
         }
         result = self.service.spreadsheets().values().append(
             spreadsheetId=self.spreadsheet_id,
-            range='A:I',  # Теперь до колонки I (было H)
+            range='A:K',  # ИЗМЕНЕНО: было A:I, стало A:K
             valueInputOption='USER_ENTERED',
             body=body
         ).execute()
@@ -71,7 +93,9 @@ class SheetsHandler:
             'Статус',
             'Ссылка ФНС',
             'Ссылка Drive',
-            'Добавлено (МСК)'  # Новая колонка
+            'Добавлено (МСК)',
+            'Пользователь',  # НОВАЯ КОЛОНКА J
+            'Ошибки обработки'  # НОВАЯ КОЛОНКА K
         ]
         
         body = {
@@ -79,7 +103,7 @@ class SheetsHandler:
         }
         result = self.service.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
-            range='A1:I1',  # Теперь до колонки I
+            range='A1:K1',  # ИЗМЕНЕНО: было A1:I1, стало A1:K1
             valueInputOption='RAW',
             body=body
         ).execute()
