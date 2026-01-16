@@ -17,6 +17,7 @@ from qr_parser import parse_fns_url
 from user_manager import UserManager
 from drive_handler import DriveHandler
 from analysis_handler import AnalysisSheetHandler
+from statistics_handler import StatisticsHandler
 
 load_dotenv()
 
@@ -29,6 +30,13 @@ logger = logging.getLogger(__name__)
 
 # Инициализация менеджера пользователей
 user_manager = UserManager()
+
+# Инициализация сбора статистики
+try:
+    statistics = StatisticsHandler()
+except Exception as e:
+    logger.error(f"Ошибка инициализации статистики: {e}")
+    statistics = None
 
 # Хранилище структуры пользователей (chat_id -> user_structure)
 user_structures = {}
@@ -77,16 +85,76 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     structure = get_or_init_user_structure(chat_id, username, chat_title)
     
+    # Логируем действие
+    if statistics:
+        statistics.log_action(
+            user_id=chat_id,
+            username=username,
+            action="/start",
+            result="успех",
+            details=f"Инициализация структуры для {structure['chat_name']}"
+        )
+    
     await update.message.reply_text(
-        "👋 Привет! Я бот для обработки чеков самозанятых.\n\n"
+        "👋 Привет! Это ДЕМО-версия бота от команды YOMI\n\n"
+        "🤖 Я помогаю обрабатывать чеки самозанятых:\n"
+        "• Распознаю данные с фото\n"
+        "• Загружаю на Google Drive\n"
+        "• Добавляю в таблицу\n\n"
         "📤 Отправь мне:\n"
         "• 📸 Фото чека (или несколько сразу)\n"
         "• 📄 PDF файл\n"
-        "• 🔗 Ссылку на чек ФНС\n\n"
-        "🔍 Команды:\n"
-        "• /full_analyze - массовая обработка чеков из папки\n\n"
+        "• 🔗 Ссылку на чек ФНС\n"
+        "• /full_analyze - массовая обработка из папки\n\n"
         f"📁 Твоя папка: {structure['user_folder_link']}\n"
-        f"📊 Твоя таблица: {structure['user_sheet_link']}"
+        f"📊 Твоя таблица: {structure['user_sheet_link']}\n\n"
+        "🚀 <b>Скоро:</b> автоматическая проверка актуальности чеков и другие улучшения!\n\n"
+        "💰 Поддержать разработку: https://tbank.ru/cf/9wS7L6U5JP6\n"
+        "💬 Предложения и вопросы: @mishaabramyan\n\n"
+        "🎬 Другие продукты YOMI:\n"
+        "• @yomi_invoice_bot - авансовые отчеты для кино\n"
+        "• И многое другое → @yomicalendar",
+        parse_mode='HTML'
+    )
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Команда /help - справка по боту
+    """
+    # Логируем действие
+    if statistics:
+        statistics.log_action(
+            user_id=update.effective_chat.id,
+            username=update.effective_user.username,
+            action="/help",
+            result="успех",
+            details="Просмотр справки"
+        )
+    
+    await update.message.reply_text(
+        "📖 <b>Справка по боту YOMI</b>\n\n"
+        "🤖 <b>Что я умею:</b>\n"
+        "• Распознавать данные с чеков через AI\n"
+        "• Загружать чеки на Google Drive\n"
+        "• Добавлять данные в Google Sheets\n"
+        "• Обрабатывать пачки чеков\n\n"
+        "📤 <b>Как пользоваться:</b>\n"
+        "1. Отправь фото чека или PDF\n"
+        "2. Проверь распознанные данные\n"
+        "3. Готово! Чек сохранен\n\n"
+        "🔍 <b>Команды:</b>\n"
+        "/start - главное меню\n"
+        "/full_analyze - массовая обработка из папки\n"
+        "/help - эта справка\n\n"
+        "💡 <b>Советы:</b>\n"
+        "• Фотографируй чеки при хорошем освещении\n"
+        "• Можно отправлять несколько фото сразу\n"
+        "• Для пачек чеков удобнее /full_analyze\n\n"
+        "💰 Поддержать: https://tbank.ru/cf/9wS7L6U5JP6\n"
+        "💬 Вопросы: @mishaabramyan\n"
+        "🎬 Канал: @yomicalendar",
+        parse_mode='HTML'
     )
 
 
@@ -104,6 +172,16 @@ async def full_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📁 Создаю папку для анализа...")
     
     try:
+        # Логируем начало анализа
+        if statistics:
+            statistics.log_action(
+                user_id=chat_id,
+                username=username,
+                action="/full_analyze - начало",
+                result="успех",
+                details=f"Создание папки для {structure['chat_name']}"
+            )
+        
         # Создаем папку с именем: @username ГГГГ-ММ-ДД ЧЧ-ММ
         timestamp = datetime.now().strftime("%Y-%m-%d %H-%M")
         folder_name = f"{structure['chat_name']} {timestamp}"
@@ -141,6 +219,17 @@ async def full_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Ошибка создания папки: {e}")
+        
+        # Логируем ошибку
+        if statistics:
+            statistics.log_action(
+                user_id=chat_id,
+                username=username,
+                action="/full_analyze",
+                result="ошибка",
+                details=str(e)
+            )
+        
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 
@@ -266,11 +355,29 @@ async def process_analysis_folder(query, folder_info):
                         source_name=f"Папка: {folder_name}"
                     )
                     
+                    # Обновляем статистику пользователя
+                    if statistics:
+                        statistics.update_user_stats(
+                            user_id=query.message.chat_id,
+                            username=query.from_user.username,
+                            action_type='receipt',
+                            success=True
+                        )
+                    
                     success_count += 1
                     processed_count += 1
                 else:
                     errors.append(f"{file_name}: {message}")
                     processed_count += 1
+                    
+                    # Логируем ошибку в статистику
+                    if statistics:
+                        statistics.update_user_stats(
+                            user_id=query.message.chat_id,
+                            username=query.from_user.username,
+                            action_type='receipt',
+                            success=False
+                        )
                 
                 # Удаляем временный файл
                 os.unlink(tmp_path)
@@ -297,6 +404,16 @@ async def process_analysis_folder(query, folder_info):
                 result_message += f"\n... и еще {len(errors) - 10} ошибок"
         
         await query.message.reply_text(result_message, parse_mode='HTML')
+        
+        # Логируем завершение анализа
+        if statistics:
+            statistics.log_action(
+                user_id=query.message.chat_id,
+                username=query.from_user.username,
+                action="/full_analyze - завершение",
+                result="успех",
+                details=f"Обработано: {success_count}/{total_files}"
+            )
         
         # Удаляем информацию о папке из памяти
         chat_id = query.message.chat_id
@@ -354,6 +471,22 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         upload_success, upload_message = processor.upload_and_save(tmp_path, data)
         
         if upload_success:
+            # Обновляем статистику
+            if statistics:
+                statistics.update_user_stats(
+                    user_id=chat_id,
+                    username=username,
+                    action_type='receipt',
+                    success=True
+                )
+                statistics.log_action(
+                    user_id=chat_id,
+                    username=username,
+                    action="Обработка фото",
+                    result="успех",
+                    details=f"ФИО: {data.get('full_name')}, Сумма: {data.get('amount')}"
+                )
+            
             # Успешно загружено
             error_info = ""
             if data.get('error_details'):
@@ -370,6 +503,22 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await message.reply_text(summary, parse_mode='HTML')
         else:
+            # Логируем ошибку
+            if statistics:
+                statistics.update_user_stats(
+                    user_id=chat_id,
+                    username=username,
+                    action_type='receipt',
+                    success=False
+                )
+                statistics.log_action(
+                    user_id=chat_id,
+                    username=username,
+                    action="Обработка фото",
+                    result="ошибка",
+                    details=upload_message
+                )
+            
             await message.reply_text(f"❌ Ошибка сохранения:\n{upload_message}")
         
         # Удаляем временный файл
@@ -448,6 +597,22 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         upload_success, upload_message = processor.upload_and_save(tmp_path, data)
         
         if upload_success:
+            # Обновляем статистику
+            if statistics:
+                statistics.update_user_stats(
+                    user_id=chat_id,
+                    username=username,
+                    action_type='receipt',
+                    success=True
+                )
+                statistics.log_action(
+                    user_id=chat_id,
+                    username=username,
+                    action="Обработка PDF",
+                    result="успех",
+                    details=f"ФИО: {data.get('full_name')}, Сумма: {data.get('amount')}"
+                )
+            
             error_info = ""
             if data.get('error_details'):
                 error_info = f"\n\n⚠️ Ошибки распознавания:\n{data['error_details']}"
@@ -463,6 +628,22 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_text(summary, parse_mode='HTML')
         else:
+            # Логируем ошибку
+            if statistics:
+                statistics.update_user_stats(
+                    user_id=chat_id,
+                    username=username,
+                    action_type='receipt',
+                    success=False
+                )
+                statistics.log_action(
+                    user_id=chat_id,
+                    username=username,
+                    action="Обработка PDF",
+                    result="ошибка",
+                    details=upload_message
+                )
+            
             await update.message.reply_text(f"❌ Ошибка сохранения:\n{upload_message}")
         
         # Удаляем временный PDF
@@ -526,6 +707,7 @@ def main():
     # Регистрируем обработчики
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("full_analyze", full_analyze))
+    application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
