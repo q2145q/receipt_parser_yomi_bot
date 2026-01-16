@@ -79,6 +79,9 @@ receipt_parser_yomi_bot/
 ├── drive_handler.py      # Google Drive operations
 ├── sheets_handler.py     # Google Sheets operations
 ├── google_auth.py        # Google OAuth
+├── user_manager.py       # Multi-user support
+├── analysis_handler.py   # Mass analysis of receipts
+├── statistics_handler.py # Usage statistics collection
 ├── requirements.txt      # Python dependencies
 ├── .env.example          # Environment variables template
 ├── README.md            # Project overview
@@ -357,9 +360,11 @@ git push origin feature/your-feature-name
 
 - [ ] Поддержка редактирования данных через inline клавиатуру
 - [ ] Экспорт данных в различных форматах
-- [ ] Статистика и аналитика по чекам
+- [x] Базовая статистика использования (реализовано через StatisticsHandler)
+- [ ] Расширенная аналитика и дашборды по чекам
 - [ ] Поддержка нескольких языков
 - [ ] Docker контейнеризация
+- [ ] Настройка прав доступа для групповых чатов
 
 ### Низкий приоритет
 
