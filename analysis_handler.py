@@ -110,7 +110,7 @@ class AnalysisSheetHandler:
     def add_receipt_to_sheet(self, spreadsheet_id, data):
         """
         Добавление данных чека в таблицу анализа
-        (без timestamp и username - только данные чека)
+        (без timestamp - только данные чека)
         """
         row = [
             data.get('date', 'Не распознано'),

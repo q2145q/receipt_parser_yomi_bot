@@ -8,7 +8,7 @@ class DriveHandler:
     def __init__(self, root_folder_id):
         """
         Инициализация handler для Google Drive
-        root_folder_id - ID корневой папки проекта
+        root_folder_id - ID корневой папки проекта (или папки пользователя)
         """
         creds = get_google_credentials()
         self.service = build('drive', 'v3', credentials=creds)
@@ -40,10 +40,18 @@ class DriveHandler:
     def upload_file(self, file_path, buyer_inn, receipt_date, full_name):
         """
         Загрузка файла на Drive с правильной структурой
+        ВНИМАНИЕ: root_folder_id теперь это папка пользователя!
+        
         file_path - путь к локальному файлу
         buyer_inn - ИНН покупателя
         receipt_date - дата чека (объект datetime)
         full_name - ФИО в формате "Фамилия И.О."
+        
+        Структура внутри папки пользователя:
+        Папка пользователя (@username)
+        ├── 9705246070 (ИНН)
+        │   └── 08-2025 (месяц-год)
+        │       └── Фамилия И.О. 13.08.2025.jpg
         """
         # Создаем структуру папок: ИНН / месяц-год
         inn_folder_id = self.get_or_create_folder(buyer_inn, self.root_folder_id)
@@ -73,16 +81,17 @@ class DriveHandler:
             'filename': new_filename,
             'folder_path': f"{buyer_inn}/{month_folder_name}"
         }
+    
     def create_analysis_folder(self, folder_name):
         """
-        Создание папки для массового анализа
+        Создание папки для массового анализа ВНУТРИ папки пользователя
         folder_name - название папки (например: "@username 2026-01-16 10-30")
         Возвращает: (folder_id, web_link)
         """
         folder_metadata = {
             'name': folder_name,
             'mimeType': 'application/vnd.google-apps.folder',
-            'parents': [self.root_folder_id]
+            'parents': [self.root_folder_id]  # root_folder_id = папка пользователя
         }
         folder = self.service.files().create(
             body=folder_metadata,

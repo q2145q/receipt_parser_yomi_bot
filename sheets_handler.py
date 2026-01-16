@@ -31,7 +31,7 @@ class SheetsHandler:
         self.service = build('sheets', 'v4', credentials=creds)
         self.spreadsheet_id = spreadsheet_id
     
-    def add_receipt_data(self, data):
+    def add_receipt_data(self, data, source_link=None, source_name=None):
         """
         Добавление данных чека в таблицу
         data - словарь с полями:
@@ -44,13 +44,22 @@ class SheetsHandler:
             'status': 'Действителен / Аннулирован',
             'fns_url': 'https://...',
             'drive_link': 'https://...',
-            'username': '@username',  # НОВОЕ ПОЛЕ
-            'error_details': ''  # НОВОЕ ПОЛЕ - для ошибок
+            'error_details': ''  # для ошибок
         }
+        source_link - ссылка на папку анализа (если чек из папки)
+        source_name - название источника (если чек из папки)
         """
         # Получаем текущее время в московском часовом поясе
         moscow_tz = pytz.timezone('Europe/Moscow')
         timestamp = datetime.now(moscow_tz).strftime('%d.%m.%Y %H:%M:%S')
+        
+        # Формируем значение для колонки "Источник"
+        if source_link and source_name:
+            # Гиперссылка: =HYPERLINK("url", "текст")
+            source_value = f'=HYPERLINK("{source_link}"; "{source_name}")'
+        else:
+            # Обычная загрузка чека
+            source_value = 'Прямая загрузка'
         
         # Формируем строку для добавления
         row = [
@@ -58,13 +67,12 @@ class SheetsHandler:
             data.get('full_name', 'Не распознано'),
             data.get('buyer_inn', 'Не распознано'),
             data.get('services', 'Не распознано'),
-            extract_amount_number(data.get('amount', '0')),  # ИЗМЕНЕНО: теперь число
+            extract_amount_number(data.get('amount', '0')),
             data.get('status', 'Не распознано'),
             data.get('fns_url', ''),
             data.get('drive_link', ''),
             timestamp,
-            data.get('username', 'Неизвестный'),
-            data.get('error_details', '')
+            source_value  # Колонка J - "Источник"
         ]
         
         # Добавляем строку в конец таблицы
@@ -73,7 +81,7 @@ class SheetsHandler:
         }
         result = self.service.spreadsheets().values().append(
             spreadsheetId=self.spreadsheet_id,
-            range='A:K',  # ИЗМЕНЕНО: было A:I, стало A:K
+            range='A:J',
             valueInputOption='USER_ENTERED',
             body=body
         ).execute()
@@ -94,8 +102,7 @@ class SheetsHandler:
             'Ссылка ФНС',
             'Ссылка Drive',
             'Добавлено (МСК)',
-            'Пользователь',  # НОВАЯ КОЛОНКА J
-            'Ошибки обработки'  # НОВАЯ КОЛОНКА K
+            'Источник'  # НОВАЯ КОЛОНКА J
         ]
         
         body = {
@@ -103,7 +110,7 @@ class SheetsHandler:
         }
         result = self.service.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
-            range='A1:K1',  # ИЗМЕНЕНО: было A1:I1, стало A1:K1
+            range='A1:J1',
             valueInputOption='RAW',
             body=body
         ).execute()

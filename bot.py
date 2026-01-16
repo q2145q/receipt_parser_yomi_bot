@@ -14,6 +14,7 @@ from telegram.ext import (
 from dotenv import load_dotenv
 from receipt_processor import ReceiptProcessor
 from qr_parser import parse_fns_url
+from user_manager import UserManager
 from drive_handler import DriveHandler
 from analysis_handler import AnalysisSheetHandler
 
@@ -26,17 +27,56 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Инициализация процессора чеков
-processor = ReceiptProcessor()
+# Инициализация менеджера пользователей
+user_manager = UserManager()
+
+# Хранилище структуры пользователей (chat_id -> user_structure)
+user_structures = {}
 
 # Хранилище для папок анализа (user_id -> folder_info)
 analysis_folders = {}
+
+
+def get_or_init_user_structure(chat_id, username=None, chat_title=None):
+    """
+    Получение или создание структуры папок/таблиц для пользователя
+    Возвращает: {
+        'user_folder_id': 'xxx',
+        'user_folder_link': 'https://...',
+        'user_sheet_id': 'xxx',
+        'user_sheet_link': 'https://...',
+        'chat_name': '@username' или 'Название чата'
+    }
+    """
+    if chat_id in user_structures:
+        return user_structures[chat_id]
+    
+    # Получаем имя чата
+    chat_name = user_manager.get_chat_name(chat_id, username, chat_title)
+    
+    # Создаем или получаем структуру
+    structure = user_manager.get_or_create_user_structure(chat_id, chat_name)
+    structure['chat_name'] = chat_name
+    
+    # Сохраняем в памяти
+    user_structures[chat_id] = structure
+    
+    logger.info(f"Инициализирована структура для {chat_name}: {structure}")
+    
+    return structure
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Команда /start
     """
+    # Инициализируем пользователя
+    chat_id = update.effective_chat.id
+    username = update.effective_user.username
+    chat_title = update.effective_chat.title if update.effective_chat.type != 'private' else None
+    
+    structure = get_or_init_user_structure(chat_id, username, chat_title)
+    
     await update.message.reply_text(
         "👋 Привет! Я бот для обработки чеков самозанятых.\n\n"
         "📤 Отправь мне:\n"
@@ -45,7 +85,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 🔗 Ссылку на чек ФНС\n\n"
         "🔍 Команды:\n"
         "• /full_analyze - массовая обработка чеков из папки\n\n"
-        "Я распознаю данные и загружу чек на Google Drive + добавлю в таблицу."
+        f"📁 Твоя папка: {structure['user_folder_link']}\n"
+        f"📊 Твоя таблица: {structure['user_sheet_link']}"
     )
 
 
@@ -53,29 +94,35 @@ async def full_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Команда /full_analyze - массовая обработка чеков
     """
-    user_id = update.effective_user.id
-    username = update.effective_user.username or f"user_{user_id}"
+    chat_id = update.effective_chat.id
+    username = update.effective_user.username
+    chat_title = update.effective_chat.title if update.effective_chat.type != 'private' else None
+    
+    # Инициализируем пользователя
+    structure = get_or_init_user_structure(chat_id, username, chat_title)
     
     await update.message.reply_text("📁 Создаю папку для анализа...")
     
     try:
         # Создаем папку с именем: @username ГГГГ-ММ-ДД ЧЧ-ММ
         timestamp = datetime.now().strftime("%Y-%m-%d %H-%M")
-        folder_name = f"@{username} {timestamp}" if not username.startswith('user_') else f"{username} {timestamp}"
+        folder_name = f"{structure['chat_name']} {timestamp}"
         
-        drive = DriveHandler(os.getenv('GOOGLE_DRIVE_FOLDER_ID'))
+        # Создаем папку внутри папки пользователя
+        drive = DriveHandler(structure['user_folder_id'])
         folder_id, folder_link = drive.create_analysis_folder(folder_name)
         
         # Сохраняем информацию о папке
-        analysis_folders[user_id] = {
+        analysis_folders[chat_id] = {
             'folder_id': folder_id,
             'folder_name': folder_name,
-            'username': f"@{username}" if not username.startswith('user_') else username
+            'folder_link': folder_link,
+            'user_structure': structure
         }
         
         # Отправляем ссылку на папку с кнопкой
         keyboard = [
-            [InlineKeyboardButton("🚀 Начать анализ", callback_data=f'analyze_{user_id}')]
+            [InlineKeyboardButton("🚀 Начать анализ", callback_data=f'analyze_{chat_id}')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -108,24 +155,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Обработка кнопки "Начать анализ"
     if callback_data.startswith('analyze_'):
-        user_id = int(callback_data.split('_')[1])
+        chat_id = int(callback_data.split('_')[1])
         
-        # Проверяем, что это тот же пользователь
-        if user_id != update.effective_user.id:
-            await query.edit_message_text("❌ Эта кнопка не для тебя!")
+        # Проверяем, что это тот же чат
+        if chat_id != update.effective_chat.id:
+            await query.edit_message_text("❌ Эта кнопка не для этого чата!")
             return
         
         # Проверяем, что папка существует
-        if user_id not in analysis_folders:
+        if chat_id not in analysis_folders:
             await query.edit_message_text("❌ Папка не найдена. Создай новую через /full_analyze")
             return
         
-        folder_info = analysis_folders[user_id]
+        folder_info = analysis_folders[chat_id]
         
         await query.edit_message_text("🔄 Начинаю обработку чеков...\nЭто может занять несколько минут.")
         
         # Запускаем обработку
         await process_analysis_folder(query, folder_info)
+
 
 async def process_analysis_folder(query, folder_info):
     """
@@ -136,10 +184,11 @@ async def process_analysis_folder(query, folder_info):
         
         folder_id = folder_info['folder_id']
         folder_name = folder_info['folder_name']
-        username = folder_info['username']
+        folder_link = folder_info['folder_link']
+        user_structure = folder_info['user_structure']
         
         # Получаем список файлов из папки
-        drive = DriveHandler(os.getenv('GOOGLE_DRIVE_FOLDER_ID'))
+        drive = DriveHandler(user_structure['user_folder_id'])
         files = drive.list_files_in_folder(folder_id)
         
         logger.info(f"Найдено файлов: {len(files)}")
@@ -150,10 +199,16 @@ async def process_analysis_folder(query, folder_info):
         
         await query.message.reply_text(f"📊 Найдено файлов: {len(files)}\nНачинаю обработку...")
         
-        # Создаем таблицу для результатов
-        sheet_title = f"{username}, {datetime.now().strftime('%Y-%m-%d %H-%M')}, анализ"
+        # Создаем таблицу для результатов анализа
+        sheet_title = f"{folder_name}, анализ"
         analysis_sheet = AnalysisSheetHandler()
         spreadsheet_id, sheet_link = analysis_sheet.create_analysis_spreadsheet(sheet_title, folder_id)
+        
+        # Создаем процессор с пользовательской структурой
+        processor = ReceiptProcessor(
+            user_folder_id=user_structure['user_folder_id'],
+            user_sheet_id=user_structure['user_sheet_id']
+        )
         
         # Статистика
         total_files = len(files)
@@ -201,8 +256,15 @@ async def process_analysis_folder(query, folder_info):
                     file_link = f"https://drive.google.com/file/d/{file_id}/view"
                     data['drive_link'] = file_link
                     
-                    # Добавляем в таблицу
+                    # Добавляем в таблицу анализа
                     analysis_sheet.add_receipt_to_sheet(spreadsheet_id, data)
+                    
+                    # Добавляем в корневую таблицу пользователя с гиперссылкой на папку
+                    processor.add_to_user_sheet(
+                        data,
+                        source_link=folder_link,
+                        source_name=f"Папка: {folder_name}"
+                    )
                     
                     success_count += 1
                     processed_count += 1
@@ -223,7 +285,8 @@ async def process_analysis_folder(query, folder_info):
         result_message += f"📊 Обработано чеков: {processed_count}/{total_files}\n"
         result_message += f"✅ Успешно: {success_count}\n"
         result_message += f"❌ Ошибок: {len(errors)}\n\n"
-        result_message += f"📁 Таблица с результатами:\n{sheet_link}\n\n"
+        result_message += f"📁 Таблица анализа:\n{sheet_link}\n\n"
+        result_message += f"📊 Корневая таблица:\n{user_structure['user_sheet_link']}\n\n"
         
         if errors:
             result_message += f"⚠️ <b>Список ошибок:</b>\n"
@@ -236,13 +299,14 @@ async def process_analysis_folder(query, folder_info):
         await query.message.reply_text(result_message, parse_mode='HTML')
         
         # Удаляем информацию о папке из памяти
-        user_id = query.from_user.id  # ИСПРАВЛЕНО
-        if user_id in analysis_folders:
-            del analysis_folders[user_id]
+        chat_id = query.message.chat_id
+        if chat_id in analysis_folders:
+            del analysis_folders[chat_id]
         
     except Exception as e:
         logger.error(f"Ошибка обработки папки: {e}")
         await query.message.reply_text(f"❌ Произошла ошибка: {str(e)}")
+
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -250,6 +314,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     message = update.message
     photo = message.photo[-1]
+    
+    # Инициализируем пользователя
+    chat_id = update.effective_chat.id
+    username = update.effective_user.username
+    chat_title = update.effective_chat.title if update.effective_chat.type != 'private' else None
+    
+    structure = get_or_init_user_structure(chat_id, username, chat_title)
     
     # Каждое фото обрабатываем независимо
     await message.reply_text("⏳ Обрабатываю чек...")
@@ -262,6 +333,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await photo_file.download_to_drive(tmp_file.name)
             tmp_path = tmp_file.name
         
+        # Создаем процессор с пользовательской структурой
+        processor = ReceiptProcessor(
+            user_folder_id=structure['user_folder_id'],
+            user_sheet_id=structure['user_sheet_id']
+        )
+        
         # Обрабатываем чек
         success, data, message_text = processor.process_receipt_image(tmp_path)
         
@@ -273,16 +350,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             os.unlink(tmp_path)
             return
         
-        # Добавляем username пользователя
-        username = update.effective_user.username or f"user_{update.effective_user.id}"
-        data['username'] = f"@{username}" if not username.startswith('user_') else username
-        
         # Сразу загружаем без подтверждения
         upload_success, upload_message = processor.upload_and_save(tmp_path, data)
         
         if upload_success:
             # Успешно загружено
-            # Формируем сообщение с учетом возможных ошибок
             error_info = ""
             if data.get('error_details'):
                 error_info = f"\n\n⚠️ Ошибки распознавания:\n{data['error_details']}"
@@ -322,6 +394,13 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
+    # Инициализируем пользователя
+    chat_id = update.effective_chat.id
+    username = update.effective_user.username
+    chat_title = update.effective_chat.title if update.effective_chat.type != 'private' else None
+    
+    structure = get_or_init_user_structure(chat_id, username, chat_title)
+    
     await update.message.reply_text("⏳ Обрабатываю PDF...")
     
     try:
@@ -345,6 +424,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         img_path = tmp_path.replace('.pdf', '.jpg')
         images[0].save(img_path, 'JPEG')
         
+        # Создаем процессор с пользовательской структурой
+        processor = ReceiptProcessor(
+            user_folder_id=structure['user_folder_id'],
+            user_sheet_id=structure['user_sheet_id']
+        )
+        
         # Обрабатываем как изображение
         success, data, message_text = processor.process_receipt_image(img_path)
         
@@ -356,10 +441,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             os.unlink(img_path)
             return
         
-        # Добавляем username пользователя
-        username = update.effective_user.username or f"user_{update.effective_user.id}"
-        data['username'] = f"@{username}" if not username.startswith('user_') else username
-        
         # Удаляем временное изображение
         os.unlink(img_path)
         
@@ -367,7 +448,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         upload_success, upload_message = processor.upload_and_save(tmp_path, data)
         
         if upload_success:
-            # Формируем сообщение с учетом возможных ошибок
             error_info = ""
             if data.get('error_details'):
                 error_info = f"\n\n⚠️ Ошибки распознавания:\n{data['error_details']}"

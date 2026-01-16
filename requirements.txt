@@ -11,3 +11,4 @@ openai==1.54.0
 pdf2image==1.17.0
 pytesseract==0.3.10
 numpy<2
+pytz==2024.1

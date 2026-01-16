@@ -72,7 +72,7 @@ class OpenAIVisionParser:
                     }
                 ],
                 max_tokens=500,
-                temperature=0  # Для точности
+                temperature=0
             )
             
             # Извлекаем JSON из ответа

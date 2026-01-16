@@ -6,7 +6,7 @@ import pickle
 
 # Области доступа для Google API
 SCOPES = [
-    'https://www.googleapis.com/auth/drive',  # ИЗМЕНЕНО: полный доступ к Drive
+    'https://www.googleapis.com/auth/drive',  # Полный доступ к Drive
     'https://www.googleapis.com/auth/spreadsheets'
 ]
 
